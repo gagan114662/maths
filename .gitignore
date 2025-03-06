@@ -100,4 +100,4 @@ configs/*.local.yaml
 *.key
 *.crt
 *.csr
-auth_tokens.json
+auth_tokens.json/config/google_credentials.json
