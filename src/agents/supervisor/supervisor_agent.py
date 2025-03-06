@@ -4,9 +4,11 @@ Supervisor agent implementation for coordinating other specialized agents.
 import logging
 import asyncio
 import uuid
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Set, Tuple, Union
 import json
+import traceback
 
 from ...core.llm import LLMInterface, Message, MessageRole
 from ...core.mcp import ModelContextProtocol, Context, ContextType
@@ -28,6 +30,441 @@ class SupervisorAgent(BaseAgent):
     4. Adjusting priorities based on ongoing results
     5. Making final decisions on strategy selection
     """
+    
+    async def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process input data and generate results.
+        
+        Args:
+            data: Input data dictionary
+            
+        Returns:
+            Processing results
+        """
+        logger.debug(f"Processing message: {data}")
+        
+        # Check for content key which might be nested
+        if isinstance(data, dict) and "content" in data:
+            content = data["content"]
+            logger.debug(f"Processing content: {content}")
+            
+            # Handle command messages
+            if isinstance(content, dict) and "command" in content:
+                logger.debug(f"Found command: {content['command']}")
+                return await self._handle_command(content["command"], content.get("params", {}))
+                
+            # Handle query messages
+            if isinstance(content, dict) and "query_type" in content:
+                logger.debug(f"Found query: {content['query_type']}")
+                return await self._handle_query(content["query_type"], content.get("params", {}))
+        
+        # Direct message patterns
+        if "command" in data:
+            return await self._handle_command(data["command"], data.get("params", {}))
+        elif "query_type" in data:
+            return await self._handle_query(data["query_type"], data.get("params", {}))
+        elif "task_id" in data:
+            return await self._handle_task_result(data["task_id"], data.get("result", {}))
+        elif "task_type" in data:
+            return await self._handle_task(data["task_type"], data.get("parameters", {}))
+        else:
+            logger.warning(f"Unknown message format: {data}")
+            return {"error": "Unknown message format"}
+            
+    async def process_with_retries(self, data: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        """
+        Process input data with automatic retries and failure handling.
+        
+        Args:
+            data: Input data dictionary
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            Processing results or error information
+        """
+        retry_count = 0
+        last_error = None
+        
+        # Store original data for retry attempts
+        original_data = data.copy()
+        
+        while retry_count <= max_retries:
+            try:
+                # If this is a retry, add retry context
+                if retry_count > 0:
+                    if 'context' not in data:
+                        data['context'] = {}
+                    data['context']['is_retry'] = True
+                    data['context']['retry_count'] = retry_count
+                    data['context']['last_error'] = str(last_error) if last_error else None
+                    logger.info(f"Retry attempt {retry_count}/{max_retries} for {self.name} agent")
+                
+                # Process the data
+                result = await self.process(data)
+                
+                # If successful, update metrics and return
+                self._update_metrics({
+                    "successful_processes": self.metrics.get("successful_processes", 0) + 1,
+                    "last_successful_process": datetime.now().isoformat()
+                })
+                
+                # Include retry information if this was a retry
+                if retry_count > 0:
+                    if 'metadata' not in result:
+                        result['metadata'] = {}
+                    result['metadata']['retry_success'] = True
+                    result['metadata']['retry_count'] = retry_count
+                
+                return result
+                
+            except Exception as e:
+                retry_count += 1
+                last_error = e
+                logger.error(f"Error in {self.name} agent process (attempt {retry_count}/{max_retries}): {str(e)}")
+                logger.debug(traceback.format_exc())
+                
+                # Log error in metrics
+                self._update_metrics({
+                    "process_errors": self.metrics.get("process_errors", 0) + 1,
+                    "last_error_time": datetime.now().isoformat()
+                })
+                
+                # If we have retries left, wait and try again
+                if retry_count <= max_retries:
+                    # Exponential backoff with jitter
+                    base_delay = 1.0 * (2 ** (retry_count - 1))  # 1, 2, 4, 8, ...
+                    jitter = random.uniform(0, 0.5 * base_delay)  # Add up to 50% random jitter
+                    delay = base_delay + jitter
+                    logger.info(f"Retrying {self.name} agent process in {delay:.2f}s")
+                    await asyncio.sleep(delay)
+                    
+                    # Reset data to original for clean retry (but keep retry context)
+                    data = original_data.copy()
+                
+        # If we get here, all retries failed
+        error_response = {
+            "error": f"Processing failed after {max_retries} attempts",
+            "last_error": str(last_error) if last_error else "Unknown error",
+            "agent": self.name,
+            "status": "error"
+        }
+        
+        # Log the failure
+        self._log_error(last_error if last_error else RuntimeError("Processing failed after multiple attempts"))
+        
+        return error_response
+        
+    async def _handle_command(self, command: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle command messages.
+        
+        Args:
+            command: Command to execute
+            params: Command parameters
+            
+        Returns:
+            Command execution result
+        """
+        if command == "create_research_plan":
+            # Create a new research plan
+            plan_name = params.get("plan_name", "Unnamed Plan")
+            goal = params.get("goal", "")
+            constraints = params.get("constraints", {})
+            deadline_str = params.get("deadline")
+            
+            deadline = None
+            if deadline_str:
+                try:
+                    deadline = datetime.fromisoformat(deadline_str)
+                except ValueError:
+                    return {"error": f"Invalid deadline format: {deadline_str}"}
+                    
+            try:
+                plan_id = await self.create_research_plan(
+                    plan_name=plan_name,
+                    goal=goal,
+                    constraints=constraints,
+                    deadline=deadline
+                )
+                
+                return {
+                    "plan_id": plan_id,
+                    "status": "created",
+                    "message": f"Research plan '{plan_name}' created successfully"
+                }
+                
+            except Exception as e:
+                logger.error(f"Error creating research plan: {str(e)}")
+                return {"error": str(e)}
+                
+        elif command == "get_plan_status":
+            # Get status of a research plan
+            plan_id = params.get("plan_id")
+            if not plan_id:
+                return {"error": "Missing plan_id parameter"}
+                
+            if plan_id not in self.research_plans:
+                return {"error": f"Plan not found with ID: {plan_id}"}
+                
+            plan = self.research_plans[plan_id]
+            return {
+                "status": plan["status"],
+                "progress": self._calculate_plan_progress(plan_id),
+                "tasks": len(plan["tasks"]),
+                "completed_tasks": sum(1 for task in plan["tasks"] if task["status"] == "completed"),
+                "name": plan["name"],
+                "goal": plan["goal"]
+            }
+            
+        else:
+            # Unknown command
+            return {"error": f"Unknown command: {command}"}
+            
+    async def _handle_query(self, query_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle query messages.
+        
+        Args:
+            query_type: Type of query
+            params: Query parameters
+            
+        Returns:
+            Query result
+        """
+        if query_type == "get_performance_summary":
+            # Get performance summary
+            return self._get_performance_summary()
+            
+        elif query_type == "get_available_agents":
+            # Get list of available agents
+            return {
+                "agents": [
+                    {
+                        "name": agent_name,
+                        "type": agent.agent_type.value,
+                        "state": agent.state.value
+                    }
+                    for agent_name, agent in self.agents.items()
+                ]
+            }
+            
+        elif query_type == "get_research_plans":
+            # Get list of research plans
+            return {
+                "plans": [
+                    {
+                        "id": plan_id,
+                        "name": plan["name"],
+                        "status": plan["status"],
+                        "progress": self._calculate_plan_progress(plan_id),
+                        "goal": plan["goal"]
+                    }
+                    for plan_id, plan in self.research_plans.items()
+                ]
+            }
+            
+        elif query_type == "get_metrics":
+            # Get agent metrics
+            return {
+                "messages_processed": self.metrics.get("messages_processed", 0),
+                "successful_processes": self.metrics.get("successful_processes", 0),
+                "process_errors": self.metrics.get("process_errors", 0),
+                "avg_processing_time": self.metrics.get("avg_processing_time", 0),
+                "last_action_time": self.last_action_time.isoformat(),
+                "agent_count": len(self.agents),
+                "plan_count": len(self.research_plans),
+                "task_count": sum(len(plan["tasks"]) for plan in self.research_plans.values()),
+                "active_task_count": len(self.active_tasks)
+            }
+            
+        else:
+            # Unknown query type
+            return {"error": f"Unknown query type: {query_type}"}
+            
+    async def _handle_task(self, task_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle task execution request.
+        
+        Args:
+            task_type: Type of task to execute
+            parameters: Task parameters
+            
+        Returns:
+            Task execution result
+        """
+        # Most tasks are handled by specialized agents
+        # Supervisor doesn't execute tasks directly in this implementation
+        return {"error": f"Supervisor agent doesn't handle task execution directly: {task_type}"}
+            
+    async def _handle_task_result(self, task_id: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle task result from a specialized agent.
+        
+        Args:
+            task_id: ID of the completed task
+            result: Task result
+            
+        Returns:
+            Result processing outcome
+        """
+        if task_id not in self.active_tasks:
+            return {"error": f"Task not found with ID: {task_id}"}
+            
+        # Get task details
+        task = self.active_tasks[task_id]
+        plan_id = task["plan_id"]
+        
+        if plan_id not in self.research_plans:
+            return {"error": f"Plan not found with ID: {plan_id}"}
+            
+        # Update task status
+        task["status"] = "completed"
+        task["completed_at"] = datetime.now().isoformat()
+        
+        # Store result in cache
+        self.results_cache[task_id] = {
+            "task_id": task_id,
+            "task_type": task["type"],
+            "agent_name": task["agent_name"],
+            "plan_id": plan_id,
+            "created_at": task["created_at"],
+            "completed_at": task["completed_at"],
+            "result": result
+        }
+        
+        # Remove from active tasks
+        del self.active_tasks[task_id]
+        
+        # Allocate next tasks if needed
+        await self._allocate_next_tasks(plan_id, task_id, result)
+        
+        return {
+            "status": "success",
+            "message": f"Task result for {task_id} processed successfully"
+        }
+        
+    def _get_performance_summary(self) -> Dict[str, Any]:
+        """
+        Get performance summary for all research plans.
+        
+        Returns:
+            Performance summary
+        """
+        # Count total strategies and those meeting targets
+        total_strategies = 0
+        meeting_targets = 0
+        
+        # Collect strategy metrics
+        strategy_metrics = []
+        
+        # Process all plans
+        for plan_id, plan in self.research_plans.items():
+            # Skip non-active plans
+            if plan["status"] not in ["active", "completed"]:
+                continue
+                
+            # Count strategies in this plan
+            plan_strategies = 0
+            plan_meeting_targets = 0
+            
+            # Check each task for strategy results
+            for task in plan["tasks"]:
+                if task["type"] in ["backtest_strategy", "assess_risk", "rank_strategies"] and task["status"] == "completed":
+                    task_id = task["id"]
+                    if task_id in self.results_cache:
+                        result = self.results_cache[task_id]["result"]
+                        
+                        # Count this as a strategy
+                        plan_strategies += 1
+                        total_strategies += 1
+                        
+                        # Check if it meets performance targets
+                        if self._strategy_meets_targets(result):
+                            plan_meeting_targets += 1
+                            meeting_targets += 1
+                            
+                            # Add to strategy metrics
+                            if "strategy" in result and "backtest_results" in result:
+                                strategy = result["strategy"]
+                                backtest = result["backtest_results"]
+                                
+                                strategy_metrics.append({
+                                    "id": strategy.get("id", ""),
+                                    "name": strategy.get("name", "Unnamed"),
+                                    "performance": {
+                                        "cagr": backtest.get("cagr", 0),
+                                        "sharpe_ratio": backtest.get("sharpe_ratio", 0),
+                                        "max_drawdown": backtest.get("max_drawdown", 0),
+                                        "win_rate": backtest.get("win_rate", 0),
+                                        "profit_factor": backtest.get("profit_factor", 0)
+                                    }
+                                })
+        
+        return {
+            "total_strategies": total_strategies,
+            "strategies_meeting_targets": meeting_targets,
+            "target_success_rate": meeting_targets / total_strategies if total_strategies > 0 else 0,
+            "performance_targets": self.performance_targets,
+            "top_strategies": sorted(strategy_metrics, key=lambda s: s["performance"]["sharpe_ratio"], reverse=True)[:5],
+            "active_research_plans": sum(1 for p in self.research_plans.values() if p["status"] == "active"),
+            "completed_research_plans": sum(1 for p in self.research_plans.values() if p["status"] == "completed")
+        }
+        
+    def _strategy_meets_targets(self, result: Dict[str, Any]) -> bool:
+        """
+        Check if a strategy meets performance targets.
+        
+        Args:
+            result: Strategy result
+            
+        Returns:
+            True if strategy meets targets, False otherwise
+        """
+        # Get backtest results
+        backtest = result.get("backtest_results", {})
+        
+        # Check against targets
+        meets_cagr = backtest.get("cagr", 0) >= self.performance_targets.get("cagr", 0.25)
+        meets_sharpe = backtest.get("sharpe_ratio", 0) >= self.performance_targets.get("sharpe_ratio", 1.0)
+        meets_drawdown = backtest.get("max_drawdown", 1.0) <= self.performance_targets.get("max_drawdown", 0.2)
+        meets_profit = backtest.get("avg_profit", 0) >= self.performance_targets.get("avg_profit", 0.0075)
+        
+        # All criteria must be met
+        return meets_cagr and meets_sharpe and meets_drawdown and meets_profit
+        
+    def _calculate_plan_progress(self, plan_id: str) -> float:
+        """
+        Calculate progress percentage for a research plan.
+        
+        Args:
+            plan_id: ID of the research plan
+            
+        Returns:
+            Progress percentage (0-100)
+        """
+        if plan_id not in self.research_plans:
+            return 0.0
+            
+        plan = self.research_plans[plan_id]
+        
+        # If the plan is completed, return 100%
+        if plan["status"] == "completed":
+            return 100.0
+            
+        # If the plan has no tasks, consider it just starting
+        if not plan["tasks"]:
+            return 0.0
+            
+        # Count tasks by status
+        total_tasks = len(plan["tasks"])
+        completed_tasks = sum(1 for task in plan["tasks"] if task["status"] == "completed")
+        in_progress_tasks = sum(1 for task in plan["tasks"] if task["status"] == "in_progress")
+        
+        # Calculate progress
+        # Completed tasks count as 100%, in-progress as 50%
+        progress = (completed_tasks + 0.5 * in_progress_tasks) / total_tasks * 100.0
+        
+        return progress
     
     def __init__(
         self,

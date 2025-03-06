@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable, Union
 
 from ..core.llm import LLMInterface, create_llm_interface
 from ..core.mcp import ModelContextProtocol, Context, ContextType
@@ -334,14 +334,12 @@ class AgentPipeline:
         try:
             message = {
                 "type": "command",
-                "content": {
-                    "command": "create_research_plan",
-                    "params": {
-                        "plan_name": plan_name,
-                        "goal": goal,
-                        "constraints": constraints or {},
-                        "deadline": deadline.isoformat() if deadline else None
-                    }
+                "command": "create_research_plan",
+                "params": {
+                    "plan_name": plan_name,
+                    "goal": goal,
+                    "constraints": constraints or {},
+                    "deadline": deadline.isoformat() if deadline else None
                 }
             }
             
@@ -370,11 +368,9 @@ class AgentPipeline:
         # Send command to supervisor
         response = await self.supervisor.send_message({
             "type": "command",
-            "content": {
-                "command": "get_plan_status",
-                "params": {
-                    "plan_id": plan_id
-                }
+            "command": "get_plan_status",
+            "params": {
+                "plan_id": plan_id
             }
         })
         
@@ -390,24 +386,114 @@ class AgentPipeline:
         # Send query to supervisor
         response = await self.supervisor.send_message({
             "type": "query",
-            "content": {
-                "query_type": "get_performance_summary"
-            }
+            "query_type": "get_performance_summary"
         })
         
         return response
     
+    async def check_agent_health(self) -> Dict[str, Any]:
+        """
+        Check health of all agents and report status.
+        
+        Returns:
+            Health status report
+        """
+        from ..agents.base_agent import AgentState
+        
+        health_status = {
+            "healthy_agents": 0,
+            "unhealthy_agents": 0,
+            "agent_status": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        for agent_name, agent in self.agents.items():
+            try:
+                # Get agent state info
+                state_info = agent.get_state_info()
+                is_healthy = agent.state in [AgentState.RUNNING, AgentState.PAUSED]
+                error_count = state_info.get('error_count', 0)
+                
+                # Check error threshold
+                high_error_count = error_count > 10
+                
+                # Check if processing time is reasonable
+                avg_processing_time = state_info.get('metrics', {}).get('avg_processing_time', 0)
+                slow_processing = avg_processing_time > 30  # More than 30 seconds considered slow
+                
+                # Determine health status
+                health_status["agent_status"][agent_name] = {
+                    "state": agent.state.value,
+                    "healthy": is_healthy and not high_error_count and not slow_processing,
+                    "error_count": error_count,
+                    "last_action_time": state_info.get('last_action_time', ''),
+                    "metrics": state_info.get('metrics', {})
+                }
+                
+                if is_healthy and not high_error_count and not slow_processing:
+                    health_status["healthy_agents"] += 1
+                else:
+                    health_status["unhealthy_agents"] += 1
+                    
+            except Exception as e:
+                logger.error(f"Error checking health for agent {agent_name}: {str(e)}")
+                health_status["agent_status"][agent_name] = {
+                    "state": "unknown",
+                    "healthy": False,
+                    "error": str(e)
+                }
+                health_status["unhealthy_agents"] += 1
+                
+        return health_status
+                
+    async def restart_unhealthy_agents(self) -> List[str]:
+        """
+        Restart any unhealthy agents to improve system reliability.
+        
+        Returns:
+            List of restarted agent names
+        """
+        restarted_agents = []
+        health_status = await self.check_agent_health()
+        
+        for agent_name, status in health_status["agent_status"].items():
+            if not status.get("healthy", False) and agent_name != "supervisor":
+                logger.warning(f"Attempting to restart unhealthy agent: {agent_name}")
+                
+                try:
+                    agent = self.agents.get(agent_name)
+                    if agent:
+                        # Stop the agent
+                        agent.stop()
+                        await asyncio.sleep(1)
+                        
+                        # Restart the agent
+                        if await agent.initialize() and await agent.start():
+                            logger.info(f"Successfully restarted agent: {agent_name}")
+                            restarted_agents.append(agent_name)
+                        else:
+                            logger.error(f"Failed to restart agent: {agent_name}")
+                            
+                except Exception as e:
+                    logger.error(f"Error restarting agent {agent_name}: {str(e)}")
+        
+        return restarted_agents
+    
     async def run_forever(self) -> None:
-        """Run the pipeline indefinitely until interrupted."""
+        """Run the pipeline indefinitely with enhanced reliability monitoring."""
         try:
             # Start the pipeline
             if not await self.start():
                 return
             
-            logger.info("Pipeline running in continuous auto-pilot mode. Press Ctrl+C to stop.")
+            logger.info("Pipeline running in continuous auto-pilot mode with health monitoring. Press Ctrl+C to stop.")
             
-            # Run indefinitely with periodic status reports
+            # Run indefinitely with periodic status reports and health checks
             iteration = 0
+            health_check_interval = 10  # Check health every 10 minutes
+            restart_attempts = 0
+            max_restart_attempts = 3
+            
             while True:
                 iteration += 1
                 
@@ -424,6 +510,34 @@ class AgentPipeline:
                                    f"Total strategies: {total_strategies} | "
                                    f"Strategies meeting targets: {meeting_targets}")
                 
+                # Perform health check at specified interval
+                if iteration % health_check_interval == 0:
+                    logger.info("Performing agent health check")
+                    health_status = await self.check_agent_health()
+                    
+                    healthy_count = health_status["healthy_agents"]
+                    unhealthy_count = health_status["unhealthy_agents"]
+                    total_agents = healthy_count + unhealthy_count
+                    
+                    logger.info(f"Health check: {healthy_count}/{total_agents} agents healthy")
+                    
+                    # If unhealthy agents found, try to restart them
+                    if unhealthy_count > 0 and restart_attempts < max_restart_attempts:
+                        logger.warning(f"Found {unhealthy_count} unhealthy agents, attempting restart")
+                        restarted = await self.restart_unhealthy_agents()
+                        restart_attempts += 1
+                        
+                        if restarted:
+                            logger.info(f"Restarted {len(restarted)} agents: {', '.join(restarted)}")
+                        
+                        # Reset restart attempts counter after successful health check
+                        if (await self.check_agent_health())["unhealthy_agents"] == 0:
+                            restart_attempts = 0
+                            logger.info("All agents now healthy")
+                    elif unhealthy_count == 0:
+                        # Reset restart attempts if all agents are healthy
+                        restart_attempts = 0
+                
                 # Sleep for a minute between checks
                 await asyncio.sleep(60)
                 
@@ -437,8 +551,8 @@ class AgentPipeline:
             await asyncio.sleep(5)
             try:
                 await self.run_forever()
-            except Exception:
-                logger.error("Failed to restart pipeline after error")
+            except Exception as restart_error:
+                logger.error(f"Failed to restart pipeline after error: {str(restart_error)}")
             
         finally:
             # Stop the pipeline

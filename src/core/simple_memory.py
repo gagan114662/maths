@@ -24,10 +24,80 @@ class SimpleMemoryManager:
     provides a straightforward way to persist memory entries.
     """
     
-    def set_working_memory(self, context_id: str, user_id: Optional[str] = None) -> None:
-        """Compatibility method for the original MemoryManager interface."""
-        # This is a no-op in the simple implementation, but provides API compatibility
-        pass
+    def set_working_memory(self, context_id: str, data: Any, user_id: Optional[str] = None) -> None:
+        """
+        Store data in working memory cache.
+        
+        Args:
+            context_id: Identifier for the memory
+            data: Data to store
+            user_id: Optional user identifier
+        """
+        # Create working memory directory if it doesn't exist
+        working_memory_dir = self.memory_dir / "working_memory"
+        working_memory_dir.mkdir(exist_ok=True)
+        
+        # Create file path
+        file_path = working_memory_dir / f"{context_id}.json"
+        
+        try:
+            # Store data with timestamp
+            memory_data = {
+                "data": data,
+                "timestamp": datetime.now().isoformat(),
+                "user_id": user_id
+            }
+            
+            with open(file_path, 'w') as f:
+                json.dump(memory_data, f, indent=2)
+                
+            # Also update cache
+            self.cache[f"working_memory_{context_id}"] = memory_data
+            
+        except Exception as e:
+            logger.error(f"Error setting working memory '{context_id}': {str(e)}")
+            
+    def get_working_memory(self, context_id: str, user_id: Optional[str] = None) -> Optional[Any]:
+        """
+        Retrieve data from working memory cache.
+        
+        Args:
+            context_id: Identifier for the memory
+            user_id: Optional user identifier
+            
+        Returns:
+            Stored data, or None if not found
+        """
+        # Check cache first
+        cache_key = f"working_memory_{context_id}"
+        if cache_key in self.cache:
+            cached_data = self.cache[cache_key]
+            if user_id is None or cached_data.get("user_id") == user_id:
+                return cached_data.get("data")
+        
+        # If not in cache, try to load from file
+        working_memory_dir = self.memory_dir / "working_memory"
+        file_path = working_memory_dir / f"{context_id}.json"
+        
+        if not file_path.exists():
+            return None
+            
+        try:
+            with open(file_path, 'r') as f:
+                memory_data = json.load(f)
+                
+            # Check user ID if provided
+            if user_id is not None and memory_data.get("user_id") != user_id:
+                return None
+                
+            # Update cache
+            self.cache[cache_key] = memory_data
+            
+            return memory_data.get("data")
+            
+        except Exception as e:
+            logger.error(f"Error getting working memory '{context_id}': {str(e)}")
+            return None
     
     def __init__(self, memory_dir: str = "memory"):
         """
@@ -52,6 +122,7 @@ class SimpleMemoryManager:
         """Create required directories."""
         self.memory_dir.mkdir(exist_ok=True, parents=True)
         self.entries_dir.mkdir(exist_ok=True)
+        (self.memory_dir / "working_memory").mkdir(exist_ok=True)
     
     def _load_index(self):
         """Load or create the memory index."""

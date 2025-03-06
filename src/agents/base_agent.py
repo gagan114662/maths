@@ -5,7 +5,8 @@ import logging
 import asyncio
 import enum
 import json
-from typing import Dict, List, Any, Optional, Union, Tuple
+import random
+from typing import Dict, List, Any, Optional, Union, Tuple, Callable
 from datetime import datetime
 from abc import ABC, abstractmethod
 import traceback
@@ -234,7 +235,7 @@ IMPORTANT GUIDELINES:
         
     async def handle_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Handle incoming message.
+        Handle incoming message with improved error handling and resilience.
         
         Args:
             message: Input message
@@ -247,6 +248,39 @@ IMPORTANT GUIDELINES:
             if not self._validate_message(message):
                 raise ValueError("Invalid message format")
                 
+            # Check circuit breaker pattern - if too many errors, fail fast
+            error_threshold = 5
+            recent_error_window = 300  # 5 minutes in seconds
+            
+            if self.errors:
+                # Count recent errors
+                now = datetime.now()
+                recent_errors = 0
+                
+                for error in self.errors[-error_threshold:]:
+                    error_time = datetime.fromisoformat(error['timestamp'])
+                    if (now - error_time).total_seconds() < recent_error_window:
+                        recent_errors += 1
+                
+                # Circuit breaker: If too many recent errors, temporarily reject requests
+                if recent_errors >= error_threshold:
+                    logger.warning(f"Circuit breaker triggered for {self.name} agent due to {recent_errors} recent errors")
+                    
+                    # Allow override with special flag
+                    if not message.get('force_execution', False):
+                        return {
+                            'status': 'error',
+                            'error': 'Service temporarily unavailable due to multiple failures',
+                            'circuit_breaker': True,
+                            'agent': {
+                                'name': self.name,
+                                'type': self.agent_type.value,
+                                'state': self.state.value
+                            },
+                            'retry_after': 60,  # Suggest retry after 60 seconds
+                            'timestamp': datetime.now().isoformat()
+                        }
+            
             # Update metrics
             self._update_metrics({
                 "messages_received": self.metrics.get("messages_received", 0) + 1
@@ -255,12 +289,39 @@ IMPORTANT GUIDELINES:
             # Log message receipt
             logger.debug(f"Agent {self.name} received message: {message.get('type')}")
             
-            # Process message
+            # Process message with retry capability
             processing_start = datetime.now()
-            response = await self.process(message.get('data', {}))
+            
+            # Use improved process with retries
+            message_data = message.get('data', {})
+            response = await self.process_with_retries(message_data)
+            
             processing_time = (datetime.now() - processing_start).total_seconds()
             
-            # Update metrics
+            # Check for error response from process_with_retries
+            if isinstance(response, dict) and response.get('status') == 'error':
+                # This is an error response from process_with_retries
+                error_result = {
+                    'status': 'error',
+                    'error': response.get('error', 'Unknown processing error'),
+                    'details': response,
+                    'agent': {
+                        'name': self.name,
+                        'type': self.agent_type.value,
+                        'state': self.state.value
+                    },
+                    'metrics': {
+                        'processing_time': processing_time
+                    },
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                # Store interaction for error cases too
+                self._store_interaction(message, error_result)
+                
+                return error_result
+            
+            # Update metrics for successful processing
             self._update_metrics({
                 "messages_processed": self.metrics.get("messages_processed", 0) + 1,
                 "avg_processing_time": (
@@ -444,10 +505,16 @@ IMPORTANT GUIDELINES:
         system_message: Optional[str] = None,
         contexts: Optional[List[Context]] = None,
         history: Optional[List[Message]] = None,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
+        stream: bool = False,
+        stream_handler: Optional[Callable[[str], None]] = None,
+        response_validator: Optional[Callable[[str], bool]] = None,
+        max_tokens: Optional[int] = None,
+        cache_key: Optional[str] = None,
+        cache_ttl: int = 3600  # 1 hour default TTL
     ) -> str:
         """
-        Chat with the LLM.
+        Chat with the LLM with enhanced features for streaming, validation, and caching.
         
         Args:
             user_message: User message content
@@ -455,10 +522,27 @@ IMPORTANT GUIDELINES:
             contexts: Optional list of contexts to include
             history: Optional conversation history
             temperature: Optional temperature parameter for LLM
+            stream: Whether to stream the response
+            stream_handler: Function to handle streamed chunks (required if stream=True)
+            response_validator: Optional function to validate response content
+            max_tokens: Maximum tokens to generate
+            cache_key: Optional key for caching responses
+            cache_ttl: Time to live for cached responses in seconds
             
         Returns:
             LLM response content
         """
+        # Check cache if cache_key provided
+        if cache_key and self.memory:
+            cached_data = self.memory.get_working_memory(f"llm_cache_{cache_key}")
+            if cached_data:
+                cache_time = datetime.fromisoformat(cached_data.get("timestamp", ""))
+                now = datetime.now()
+                # Check if cache is still valid
+                if (now - cache_time).total_seconds() < cache_ttl:
+                    logger.debug(f"Using cached LLM response for key: {cache_key}")
+                    return cached_data.get("response", "")
+        
         # Create messages
         messages = []
         
@@ -473,15 +557,51 @@ IMPORTANT GUIDELINES:
         # Add user message
         messages.append(self.llm.create_user_message(user_message))
         
-        # Get response from LLM
-        response = await self.llm.chat(
-            messages=messages,
-            contexts=contexts,
-            temperature=temperature
-        )
-        
-        # Return response content
-        return response.message.content or ""
+        try:
+            # Use streaming if requested
+            if stream and stream_handler:
+                # Get streaming response
+                response = await self.llm.chat_with_streaming(
+                    messages=messages,
+                    contexts=contexts,
+                    message_handler=stream_handler,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            else:
+                # Get standard response with validation if provided
+                response = await self.llm.chat(
+                    messages=messages,
+                    contexts=contexts,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_validator=response_validator
+                )
+            
+            # Get response content
+            response_content = response.message.content or ""
+            
+            # Cache response if cache_key provided
+            if cache_key and self.memory and response_content:
+                self.memory.set_working_memory(
+                    f"llm_cache_{cache_key}",
+                    {
+                        "response": response_content,
+                        "timestamp": datetime.now().isoformat(),
+                        "token_usage": response.usage,
+                        "model": response.model
+                    }
+                )
+            
+            # Return response content
+            return response_content
+            
+        except Exception as e:
+            logger.error(f"Error in chat_with_llm: {str(e)}")
+            self._log_error(e)
+            
+            # Return error message or empty string
+            return f"Error: {str(e)}" if self.config.get("return_errors", False) else ""
         
     async def connect_agent(self, agent_name: str, agent: 'BaseAgent') -> bool:
         """
