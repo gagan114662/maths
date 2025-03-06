@@ -1,0 +1,4 @@
+timestamp: 2025-03-05T13:50:41.819207
+success: False
+duration: 0:00:03.792462
+command: pytest -m unit --cov=src --cov-report=term-missing -

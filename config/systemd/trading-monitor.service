@@ -1,0 +1,57 @@
+[Unit]
+Description=Enhanced Trading Strategy System Monitor
+Documentation=https://github.com/username/enhanced-trading-system
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+WorkingDirectory=/opt/trading-system
+Environment=PYTHONPATH=/opt/trading-system
+Environment=TRADING_ENV=production
+
+# Start command
+ExecStart=/opt/trading-system/venv/bin/python monitor_system.py
+
+# Stop command
+ExecStop=/bin/kill -SIGTERM $MAINPID
+
+# Restart configuration
+Restart=always
+RestartSec=3
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=65535
+
+# Security
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# System resources
+CPUQuota=50%
+MemoryLimit=2G
+
+[Install]
+WantedBy=multi-user.target
+
+# Installation instructions:
+# 1. Copy this file to /etc/systemd/system/trading-monitor@.service
+# 2. Enable the service: systemctl enable trading-monitor@username
+# 3. Start the service: systemctl start trading-monitor@username
+# 4. Check status: systemctl status trading-monitor@username
+# 5. View logs: journalctl -u trading-monitor@username
+
+# Configuration Notes:
+# - Adjust WorkingDirectory to match your installation
+# - Modify resource limits (CPUQuota, MemoryLimit) as needed
+# - Update Environment variables for your setup
+# - Change security settings based on requirements

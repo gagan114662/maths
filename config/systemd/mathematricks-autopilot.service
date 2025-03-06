@@ -1,0 +1,13 @@
+[Unit]
+Description=Mathematricks Autopilot Backtester
+After=network.target
+
+[Service]
+User=vandan
+WorkingDirectory=/mnt/VANDAN_DISK/gagan_stuff/maths_scientist_mcp
+ExecStart=/usr/bin/python3 /mnt/VANDAN_DISK/gagan_stuff/maths_scientist_mcp/run_autopilot.py
+Restart=on-failure
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target

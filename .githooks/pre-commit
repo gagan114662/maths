@@ -1,0 +1,11 @@
+#!/bin/bash
+# Git pre-commit hook to run code quality checks
+
+# Get the project root directory
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+
+# Run the pre-commit checks
+$PROJECT_ROOT/pre-commit-check.sh
+
+# Exit with the same status as the pre-commit checks
+exit $?

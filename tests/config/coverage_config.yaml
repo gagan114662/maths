@@ -1,0 +1,117 @@
+# Test coverage configuration
+
+coverage:
+  # Report settings
+  reports:
+    xml_output: coverage.xml
+    html_output: htmlcov
+    json_output: coverage.json
+    formats:
+      - xml
+      - html
+      - json
+    
+  # Coverage requirements
+  requirements:
+    minimum_coverage: 80.0
+    fail_under: 75.0
+    branch_coverage: true
+    
+  # File patterns
+  patterns:
+    include:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+    exclude:
+      - "tests/data/*"
+      - "**/__init__.py"
+      - "setup.py"
+      
+  # Coverage collection
+  collection:
+    branch: true
+    concurrency:
+      - thread
+      - multiprocessing
+    source:
+      - src
+    omit:
+      - "src/migrations/*"
+      - "src/config/*"
+    plugins:
+      - coverage_conditional_plugin
+      
+  # Report options
+  report:
+    exclude_lines:
+      - "pragma: no cover"
+      - "def __repr__"
+      - "raise NotImplementedError"
+      - "if __name__ == .__main__.:"
+      - "pass"
+      - "raise ImportError"
+    partial_branches:
+      - "pragma: no branch"
+      
+  # Paths and directories
+  paths:
+    coverage_dir: "tests/reports/coverage"
+    trends_file: "tests/reports/coverage/trends.json"
+    archive_dir: "tests/reports/coverage/archive"
+    
+  # Trend analysis
+  trends:
+    retention_days: 90
+    minimum_data_points: 5
+    alert_threshold: 5.0  # Alert if coverage drops more than 5%
+    archive_interval: 30  # Archive trends every 30 days
+    
+  # Reporting thresholds
+  thresholds:
+    excellent: 90.0
+    good: 80.0
+    acceptable: 70.0
+    poor: 60.0
+    critical: 50.0
+    
+  # Badge generation
+  badges:
+    generate: true
+    style: flat
+    colors:
+      excellent: green
+      good: yellowgreen
+      acceptable: yellow
+      poor: orange
+      critical: red
+      
+  # Integration
+  integration:
+    github:
+      comment: true
+      status_check: true
+    gitlab:
+      comment: true
+      status_check: true
+    jenkins:
+      publish_report: true
+    
+  # Notifications
+  notifications:
+    email:
+      enabled: true
+      recipients:
+        - dev-team@example.com
+      on_failure: true
+      on_success: false
+    slack:
+      enabled: false
+      webhook_url: ""
+      channel: "#ci-coverage"
+      
+  # Debug options
+  debug:
+    verbose: false
+    log_level: INFO
+    trace_data_collection: false
+    save_raw_data: false

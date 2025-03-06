@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Trading System Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="grid">
+    <!-- System Overview Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">System Overview</h2>
+        </div>
+        <div id="system-metrics" class="chart-container">
+            <!-- System metrics chart will be rendered here -->
+        </div>
+        <div class="mt-2">
+            <span class="badge badge-success">Active Strategies: <span id="active-strategies-count">0</span></span>
+            <span class="badge badge-warning">Pending Actions: <span id="pending-actions-count">0</span></span>
+        </div>
+    </div>
+
+    <!-- Performance Summary Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Performance Summary</h2>
+        </div>
+        <div id="performance-chart" class="chart-container">
+            <!-- Performance chart will be rendered here -->
+        </div>
+        <div class="mt-2">
+            <table class="table">
+                <tr>
+                    <th>Total Return</th>
+                    <td id="total-return">0.00%</td>
+                    <th>Sharpe Ratio</th>
+                    <td id="sharpe-ratio">0.00</td>
+                </tr>
+                <tr>
+                    <th>Max Drawdown</th>
+                    <td id="max-drawdown">0.00%</td>
+                    <th>Win Rate</th>
+                    <td id="win-rate">0.00%</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Risk Metrics Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Risk Metrics</h2>
+        </div>
+        <div id="risk-chart" class="chart-container">
+            <!-- Risk metrics chart will be rendered here -->
+        </div>
+        <div class="mt-2">
+            <div class="alert" id="risk-alert">
+                No active risk alerts
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activities Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Recent Activities</h2>
+        </div>
+        <div class="mt-2">
+            <table class="table" id="activities-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Activities will be dynamically inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize charts
+function initializeCharts() {
+    // System Metrics Chart
+    const systemMetricsChart = new Chart(
+        document.getElementById('system-metrics').getContext('2d'),
+        {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'CPU Usage',
+                    data: [],
+                    borderColor: '#1a73e8'
+                }, {
+                    label: 'Memory Usage',
+                    data: [],
+                    borderColor: '#34a853'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        }
+    );
+
+    // Performance Chart
+    const performanceChart = new Chart(
+        document.getElementById('performance-chart').getContext('2d'),
+        {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Portfolio Value',
+                    data: [],
+                    borderColor: '#34a853'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        }
+    );
+
+    // Risk Chart
+    const riskChart = new Chart(
+        document.getElementById('risk-chart').getContext('2d'),
+        {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'VaR',
+                    data: [],
+                    backgroundColor: '#fbbc05'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        }
+    );
+
+    return {
+        systemMetricsChart,
+        performanceChart,
+        riskChart
+    };
+}
+
+// WebSocket handling
+const charts = initializeCharts();
+const ws = new WebSocket(`ws://${window.location.host}/ws/updates`);
+
+ws.onopen = function() {
+    console.log('WebSocket connected');
+    ws.send(JSON.stringify({type: 'subscribe', data: 'all'}));
+};
+
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    updateDashboard(data);
+};
+
+ws.onclose = function() {
+    console.log('WebSocket disconnected');
+    setTimeout(function() {
+        // Attempt to reconnect
+        window.location.reload();
+    }, 5000);
+};
+
+// Update dashboard with new data
+function updateDashboard(data) {
+    switch(data.type) {
+        case 'system_metrics':
+            updateSystemMetrics(data.data);
+            break;
+        case 'performance':
+            updatePerformance(data.data);
+            break;
+        case 'risk':
+            updateRisk(data.data);
+            break;
+        case 'activity':
+            updateActivities(data.data);
+            break;
+    }
+}
+
+function updateSystemMetrics(metrics) {
+    // Update charts
+    charts.systemMetricsChart.data.labels.push(new Date().toLocaleTimeString());
+    charts.systemMetricsChart.data.datasets[0].data.push(metrics.cpu);
+    charts.systemMetricsChart.data.datasets[1].data.push(metrics.memory);
+    charts.systemMetricsChart.update();
+
+    // Update counters
+    document.getElementById('active-strategies-count').textContent = metrics.active_strategies;
+    document.getElementById('pending-actions-count').textContent = metrics.pending_actions;
+}
+
+function updatePerformance(performance) {
+    // Update chart
+    charts.performanceChart.data.labels.push(new Date().toLocaleTimeString());
+    charts.performanceChart.data.datasets[0].data.push(performance.portfolio_value);
+    charts.performanceChart.update();
+
+    // Update metrics
+    document.getElementById('total-return').textContent = `${performance.total_return.toFixed(2)}%`;
+    document.getElementById('sharpe-ratio').textContent = performance.sharpe_ratio.toFixed(2);
+    document.getElementById('max-drawdown').textContent = `${performance.max_drawdown.toFixed(2)}%`;
+    document.getElementById('win-rate').textContent = `${performance.win_rate.toFixed(2)}%`;
+}
+
+function updateRisk(risk) {
+    // Update chart
+    charts.riskChart.data.labels = risk.metrics.map(m => m.name);
+    charts.riskChart.data.datasets[0].data = risk.metrics.map(m => m.value);
+    charts.riskChart.update();
+
+    // Update alert
+    const alertElement = document.getElementById('risk-alert');
+    alertElement.className = `alert alert-${risk.alert_level}`;
+    alertElement.textContent = risk.alert_message;
+}
+
+function updateActivities(activity) {
+    const table = document.getElementById('activities-table').getElementsByTagName('tbody')[0];
+    const row = table.insertRow(0);
+    
+    row.innerHTML = `
+        <td>${new Date(activity.timestamp).toLocaleTimeString()}</td>
+        <td>${activity.type}</td>
+        <td>${activity.description}</td>
+        <td><span class="badge badge-${activity.status}">${activity.status}</span></td>
+    `;
+
+    // Keep only last 10 activities
+    while (table.rows.length > 10) {
+        table.deleteRow(table.rows.length - 1);
+    }
+}
+</script>
+{% endblock %}

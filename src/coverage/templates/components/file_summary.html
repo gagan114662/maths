@@ -1,0 +1,73 @@
+{# Component: File Summary Row #}
+{% macro file_row(file) %}
+<tr>
+    <td class="file-name">
+        <div class="file-path">{{ file.name }}</div>
+        {% if file.description %}
+        <div class="file-description">{{ file.description }}</div>
+        {% endif %}
+    </td>
+    <td class="file-stats">
+        <div class="stat-item">
+            <span class="stat-label">Total:</span>
+            <span class="stat-value">{{ file.lines.total }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Covered:</span>
+            <span class="stat-value">{{ file.lines.covered }}</span>
+        </div>
+    </td>
+    <td class="file-coverage">
+        {% set coverage = (file.lines.covered / file.lines.total * 100) %}
+        {% with value=coverage %}
+            {% include 'components/progress_bar.html' %}
+        {% endwith %}
+    </td>
+    <td class="file-missing">
+        {% if file.lines.missed > 0 %}
+        <div class="missing-lines" title="Missing Lines">
+            <span class="count">{{ file.lines.missed }}</span>
+            {% if file.missing_lines %}
+            <span class="detail">Lines: {{ file.missing_lines|join(', ') }}</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="fully-covered">✓</div>
+        {% endif %}
+    </td>
+</tr>
+{% endmacro %}
+
+{# Component: File Summary Table #}
+<div class="file-list">
+    <h2>Files</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Lines</th>
+                <th>Coverage</th>
+                <th>Missing Lines</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for file in files %}
+                {{ file_row(file) }}
+            {% endfor %}
+        </tbody>
+        {% if summary %}
+        <tfoot>
+            <tr class="summary-row">
+                <td>Total</td>
+                <td>{{ summary.total_lines }}</td>
+                <td>
+                    {% with value=summary.coverage %}
+                        {% include 'components/progress_bar.html' %}
+                    {% endwith %}
+                </td>
+                <td>{{ summary.missed_lines }}</td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+</div>

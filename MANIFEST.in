@@ -1,0 +1,37 @@
+# Include configuration files
+include FinTSB/configs/*.yaml
+include FinTSB/data/*.yaml
+include src/utils/*.yaml
+
+# Include documentation
+include README.md
+include DESIGN.md
+include LICENSE
+include implementation_plan.md
+
+# Include test files
+recursive-include tests *.py
+
+# Include Makefile and scripts
+include Makefile
+include *.py
+include *.sh
+include pre-commit-check.sh
+
+# Include requirements
+include requirements.txt
+
+# Exclude development files
+exclude .gitignore
+exclude .env*
+exclude pytest.ini
+exclude setup.cfg
+exclude .coverage
+exclude .pytest_cache
+exclude __pycache__
+recursive-exclude * *.pyc
+recursive-exclude * *.pyo
+recursive-exclude * *.pyd
+recursive-exclude * .DS_Store
+recursive-exclude * __pycache__
+recursive-exclude * *.so

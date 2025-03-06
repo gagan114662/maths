@@ -1,0 +1,14 @@
+{# Component: Metric Card #}
+<div class="metric-card">
+    <h3>{{ title }}</h3>
+    <div class="metric-value">{{ "%.1f"|format(value) }}%</div>
+    {% include 'components/progress_bar.html' %}
+    {% if description %}
+    <div class="metric-description">{{ description }}</div>
+    {% endif %}
+    {% if comparison and comparison.change %}
+    <div class="metric-comparison {{ 'positive' if comparison.change >= 0 else 'negative' }}">
+        {{ "%+.1f"|format(comparison.change) }}% from previous
+    </div>
+    {% endif %}
+</div>

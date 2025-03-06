@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: #1a73e8;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .metric {
+            margin: 10px 0;
+        }
+        .metric-label {
+            font-weight: bold;
+        }
+        .progress {
+            background: #eee;
+            height: 20px;
+            border-radius: 10px;
+            margin: 5px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        .excellent { background: #34a853; }
+        .good { background: #1a73e8; }
+        .acceptable { background: #fbbc05; }
+        .poor { background: #ea4335; }
+        .changes {
+            background: #fff;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .positive { color: #34a853; }
+        .negative { color: #ea4335; }
+        .footer {
+            font-size: 12px;
+            color: #666;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Coverage Report Update</h1>
+        <p>Generated on {{ timestamp }}</p>
+    </div>
+
+    <div class="summary">
+        <h2>Coverage Summary</h2>
+        <div class="metric">
+            <div class="metric-label">Total Coverage: {{ "%.1f"|format(stats.total_coverage) }}%</div>
+            <div class="progress">
+                <div class="progress-bar {{ get_threshold_class(stats.total_coverage) }}"
+                     style="width: {{ stats.total_coverage }}%"></div>
+            </div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Line Coverage: {{ "%.1f"|format(stats.line_coverage) }}%</div>
+            <div class="progress">
+                <div class="progress-bar {{ get_threshold_class(stats.line_coverage) }}"
+                     style="width: {{ stats.line_coverage }}%"></div>
+            </div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Branch Coverage: {{ "%.1f"|format(stats.branch_coverage) }}%</div>
+            <div class="progress">
+                <div class="progress-bar {{ get_threshold_class(stats.branch_coverage) }}"
+                     style="width: {{ stats.branch_coverage }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    {% if comparison %}
+    <div class="changes">
+        <h2>Changes from Previous Report</h2>
+        <div class="metric">
+            <div class="metric-label">Line Coverage Change:</div>
+            <div class="{% if comparison.line_coverage_change >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "%+.1f"|format(comparison.line_coverage_change) }}%
+            </div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Branch Coverage Change:</div>
+            <div class="{% if comparison.branch_coverage_change >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "%+.1f"|format(comparison.branch_coverage_change) }}%
+            </div>
+        </div>
+        {% if comparison.new_files %}
+        <h3>New Files:</h3>
+        <ul>
+            {% for file in comparison.new_files %}
+            <li>{{ file }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if comparison.removed_files %}
+        <h3>Removed Files:</h3>
+        <ul>
+            {% for file in comparison.removed_files %}
+            <li>{{ file }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Coverage thresholds:</p>
+        <ul>
+            {% for level, value in thresholds.items() %}
+            <li>{{ level|title }}: {{ value }}%</li>
+            {% endfor %}
+        </ul>
+        <p>For detailed report, please check the coverage dashboard.</p>
+    </div>
+</body>
+</html>

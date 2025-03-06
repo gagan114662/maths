@@ -1,0 +1,16 @@
+[Unit]
+Description=Daily Test Report Cleanup Timer
+Requires=test-cleanup.service
+
+[Timer]
+# Run daily at 2:00 AM
+OnCalendar=*-*-* 02:00:00
+# Add randomization to prevent all systems running at exactly the same time
+RandomizedDelaySec=900
+# Ensure timer is persistent across reboots
+Persistent=true
+# Keep track of last run time
+Unit=test-cleanup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+{# Component: Progress Bar #}
+<div class="progress">
+    <div class="progress-bar progress-bar-{{ get_threshold_class(value) }}"
+         data-value="{{ value }}"
+         role="progressbar"
+         aria-valuenow="{{ value }}"
+         aria-valuemin="0"
+         aria-valuemax="100">
+        {{ "%.1f"|format(value) }}%
+    </div>
+</div>

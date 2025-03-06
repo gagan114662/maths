@@ -1,0 +1,162 @@
+# Test configuration for Enhanced Trading Strategy System
+
+system:
+  name: "trading_system_test"
+  mode: "test"
+  log_level: "DEBUG"
+  max_memory: "2G"
+  timezone: "UTC"
+
+# Test Market Configuration
+market:
+  symbols: ["TEST/USD", "MOCK/USD"]
+  timeframe: "1m"
+  lookback: 30  # minutes
+  data_source: "mock"
+
+# Test Strategy Parameters
+strategy:
+  lookback_period: 5
+  min_trades: 10
+  metrics:
+    - "sharpe_ratio"
+    - "max_drawdown"
+    - "win_rate"
+  constraints:
+    max_position_size: 0.1
+    max_leverage: 1.0
+    min_liquidity: 1000
+
+# Test Risk Management
+risk:
+  max_drawdown: 0.1
+  var_limit: 0.02
+  position_limit: 0.05
+  correlation_limit: 0.7
+  volatility_cap: 0.1
+  stop_loss: 0.02
+  take_profit: 0.05
+
+# Test Agent Configuration
+agents:
+  generation:
+    max_strategies: 5
+    batch_size: 2
+    timeout: 30
+    templates:
+      - "mock_momentum"
+      - "mock_mean_reversion"
+
+  backtesting:
+    initial_capital: 10000
+    trading_costs: true
+    slippage: 0.001
+    parallel_runs: 2
+    cache_results: false
+
+  risk:
+    assessment_interval: 60  # 1 minute
+    monitoring_interval: 30  # 30 seconds
+    alert_threshold: 0.8
+    review_threshold: 0.6
+
+  ranking:
+    tournament_size: 4
+    min_matches: 2
+    evaluation_period: 10
+    ranking_factors:
+      returns: 0.4
+      risk: 0.3
+      consistency: 0.3
+
+  evolution:
+    population_size: 10
+    generations: 3
+    mutation_rate: 0.2
+    crossover_rate: 0.7
+    elite_size: 2
+    tournament_size: 2
+
+  meta_review:
+    analysis_interval: 300  # 5 minutes
+    min_data_points: 20
+    correlation_threshold: 0.7
+    significance_level: 0.05
+
+# Test Pipeline Configuration
+pipeline:
+  max_runtime: 300  # 5 minutes
+  checkpointing: false
+  parallel_execution: true
+  error_tolerance: 0.2
+  retry_attempts: 2
+
+# Test Monitoring
+monitoring:
+  metrics_interval: 10  # 10 seconds
+  resource_monitoring: true
+  performance_logging: true
+  host: "localhost"
+  port: 8001
+  alert_channels:
+    - "console"
+    - "log"
+  thresholds:
+    cpu_usage: 90
+    memory_usage: 90
+    error_rate: 0.05
+
+# Test Web Interface
+web:
+  host: "localhost"
+  port: 8002
+  secret_key: "test_secret_key"
+  token_expire_minutes: 30
+  cors_origins: ["http://localhost:8002"]
+  debug: true
+
+# Test Database
+database:
+  type: "sqlite"
+  path: ":memory:"
+  pool_size: 5
+  max_overflow: 10
+  echo: true
+
+# Mock Data Settings
+mock_data:
+  price_volatility: 0.02
+  volume_range: [100, 1000]
+  tick_interval: 1
+  price_trend: "random_walk"
+  gaps_probability: 0.01
+  error_probability: 0.001
+
+# Test Security
+security:
+  max_requests_per_minute: 100
+  max_failed_logins: 5
+  lockout_duration: 300  # 5 minutes
+  password_min_length: 8
+  require_2fa: false
+
+# Test Execution
+execution:
+  max_retries: 3
+  retry_delay: 1
+  timeout: 10
+  validate_orders: true
+  dry_run: true
+
+# Test Reporting
+reporting:
+  format: "json"
+  save_results: false
+  include_timestamps: true
+  metrics:
+    - "execution_time"
+    - "memory_usage"
+    - "error_count"
+  export_formats:
+    - "json"
+    - "csv"

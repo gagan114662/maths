@@ -1,0 +1,81 @@
+go ahead{# Component: Summary Metrics #}
+<div class="summary">
+    <h2>Summary</h2>
+    <div class="metrics">
+        {# Total Coverage #}
+        {% with 
+            title="Total Coverage",
+            value=stats.total_coverage,
+            description="Overall test coverage across all files",
+            comparison=comparisons.total if comparisons else None
+        %}
+            {% include 'components/metric_card.html' %}
+        {% endwith %}
+
+        {# Line Coverage #}
+        {% with 
+            title="Line Coverage",
+            value=stats.line_coverage,
+            description="Percentage of code lines executed by tests",
+            comparison=comparisons.line if comparisons else None
+        %}
+            {% include 'components/metric_card.html' %}
+        {% endwith %}
+
+        {# Branch Coverage #}
+        {% with 
+            title="Branch Coverage",
+            value=stats.branch_coverage,
+            description="Percentage of code branches executed by tests",
+            comparison=comparisons.branch if comparisons else None
+        %}
+            {% include 'components/metric_card.html' %}
+        {% endwith %}
+    </div>
+
+    {% if thresholds %}
+    <div class="threshold-info">
+        <h3>Coverage Thresholds</h3>
+        <div class="threshold-grid">
+            {% for level, value in thresholds.items() %}
+            <div class="threshold-item threshold-{{ level }}">
+                <span class="threshold-label">{{ level|title }}</span>
+                <span class="threshold-value">{{ value }}%</span>
+                <span class="threshold-indicator">
+                    {% if stats.total_coverage >= value %}✓{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if trending %}
+    <div class="trend-info">
+        <h3>Coverage Trend</h3>
+        <div class="trend-indicators">
+            <div class="trend-value {{ trending.direction }}">
+                {{ "%+.1f"|format(trending.change) }}%
+                {% if trending.direction == 'up' %}↑{% elif trending.direction == 'down' %}↓{% else %}→{% endif %}
+            </div>
+            <div class="trend-period">
+                over {{ trending.days }} days
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if alerts %}
+    <div class="coverage-alerts">
+        {% for alert in alerts %}
+        <div class="alert alert-{{ alert.level }}">
+            <div class="alert-title">{{ alert.title }}</div>
+            <div class="alert-message">{{ alert.message }}</div>
+            {% if alert.action %}
+            <div class="alert-action">{{ alert.action }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

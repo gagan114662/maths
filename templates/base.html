@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Trading System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand">Trading System</a>
+            <ul class="nav-menu">
+                <li><a href="/strategies" class="nav-link">Strategies</a></li>
+                <li><a href="/performance" class="nav-link">Performance</a></li>
+                <li><a href="/risk" class="nav-link">Risk</a></li>
+                <li><a href="/monitoring" class="nav-link">Monitoring</a></li>
+                {% if current_user %}
+                    <li><a href="/account" class="nav-link">Account</a></li>
+                    <li><a href="/logout" class="nav-link">Logout</a></li>
+                {% else %}
+                    <li><a href="/login" class="nav-link">Login</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer mt-4">
+        <div class="container text-center">
+            <p>&copy; 2025 Trading System. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // WebSocket connection
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/updates');
+        
+        ws.onopen = function() {
+            console.log('WebSocket connected');
+            ws.send(JSON.stringify({type: 'subscribe'}));
+        };
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+        };
+        
+        ws.onclose = function() {
+            console.log('WebSocket disconnected');
+        };
+        
+        function handleWebSocketMessage(data) {
+            // Handle different message types
+            switch(data.type) {
+                case 'strategy_update':
+                    updateStrategyData(data);
+                    break;
+                case 'performance_update':
+                    updatePerformanceData(data);
+                    break;
+                case 'risk_update':
+                    updateRiskData(data);
+                    break;
+                default:
+                    console.log('Unknown message type:', data.type);
+            }
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

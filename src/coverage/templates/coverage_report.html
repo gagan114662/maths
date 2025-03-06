@@ -1,0 +1,83 @@
+{# Coverage Report Template - Style definitions are in /static/styles/coverage.css #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage Report</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/coverage.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Coverage Report</h1>
+        
+        {# Coverage Summary #}
+        <div class="summary">
+            <h2>Summary</h2>
+            <div class="metrics">
+                {% for metric in [
+                    ('Total Coverage', stats.total_coverage),
+                    ('Line Coverage', stats.line_coverage),
+                    ('Branch Coverage', stats.branch_coverage)
+                ] %}
+                <div class="metric-card">
+                    <h3>{{ metric[0] }}</h3>
+                    <div class="metric-value">{{ "%.1f"|format(metric[1]) }}%</div>
+                    <div class="progress">
+                        <div class="progress-bar {{ get_threshold_class(metric[1]) }}"
+                             style="width: {{ metric[1] }}%">
+                             {{ "%.1f"|format(metric[1]) }}%
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        {# Files List #}
+        <div class="file-list">
+            <h2>Files</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Lines</th>
+                        <th>Coverage</th>
+                        <th>Missing Lines</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for file in coverage_data.files %}
+                    {% set coverage = (file.lines.covered / file.lines.total * 100) %}
+                    <tr>
+                        <td>{{ file.name }}</td>
+                        <td>{{ file.lines.total }}</td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar {{ get_threshold_class(coverage) }}"
+                                     style="width: {{ coverage }}%">
+                                    {{ "%.1f"|format(coverage) }}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ file.lines.missed }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {# Footer #}
+        <div class="footer">
+            <p>Generated on {{ timestamp }}</p>
+            <p>
+                Coverage thresholds:
+                {% for level, value in thresholds.items() %}
+                    <span>{{ level }}: {{ value }}%</span>
+                    {%- if not loop.last %} | {% endif -%}
+                {% endfor %}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

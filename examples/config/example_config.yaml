@@ -1,0 +1,154 @@
+# Example configuration for agent system
+
+# System Configuration
+system:
+  name: "trading_system_example"
+  mode: "development"
+  log_level: "INFO"
+  max_memory: "4G"
+  timezone: "UTC"
+
+# Market Configuration
+market:
+  symbols: ["AAPL", "MSFT", "GOOGL"]
+  timeframe: "1d"
+  lookback: 90  # days
+  data_source: "sample"  # Replace with actual data source
+
+# Strategy Parameters
+strategy:
+  lookback_period: 20
+  min_trades: 30
+  metrics:
+    - "sharpe_ratio"
+    - "sortino_ratio"
+    - "max_drawdown"
+    - "win_rate"
+  constraints:
+    max_position_size: 0.1
+    max_leverage: 1.0
+    min_liquidity: 1000000
+
+# Risk Management
+risk:
+  max_drawdown: 0.2
+  var_limit: 0.05
+  position_limit: 0.1
+  correlation_limit: 0.7
+  volatility_cap: 0.15
+  stop_loss: 0.05
+  take_profit: 0.1
+
+# Agent Configuration
+agents:
+  generation:
+    max_strategies: 20
+    batch_size: 5
+    timeout: 300
+    templates:
+      - "momentum"
+      - "mean_reversion"
+      - "trend_following"
+      - "volatility"
+
+  backtesting:
+    initial_capital: 100000
+    trading_costs: true
+    slippage: 0.001
+    parallel_runs: 4
+    cache_results: true
+
+  risk:
+    assessment_interval: 3600  # 1 hour
+    monitoring_interval: 300   # 5 minutes
+    alert_threshold: 0.8
+    review_threshold: 0.6
+
+  ranking:
+    tournament_size: 10
+    min_matches: 5
+    evaluation_period: 30
+    ranking_factors:
+      returns: 0.4
+      risk: 0.3
+      consistency: 0.3
+
+  evolution:
+    population_size: 50
+    generations: 10
+    mutation_rate: 0.2
+    crossover_rate: 0.7
+    elite_size: 5
+    tournament_size: 4
+
+  meta_review:
+    analysis_interval: 86400  # 24 hours
+    min_data_points: 100
+    correlation_threshold: 0.7
+    significance_level: 0.05
+
+# Pipeline Configuration
+pipeline:
+  max_runtime: 3600  # 1 hour
+  checkpointing: true
+  checkpoint_interval: 300  # 5 minutes
+  parallel_execution: true
+  error_tolerance: 0.1
+  retry_attempts: 3
+
+# Performance Monitoring
+monitoring:
+  metrics_interval: 60  # 1 minute
+  resource_monitoring: true
+  performance_logging: true
+  alert_channels:
+    - "console"
+    - "log"
+  thresholds:
+    cpu_usage: 80
+    memory_usage: 80
+    error_rate: 0.01
+
+# Reporting
+reporting:
+  format: "detailed"
+  save_results: true
+  output_dir: "results"
+  plots:
+    - "performance"
+    - "risk_metrics"
+    - "strategy_comparison"
+  export_formats:
+    - "csv"
+    - "json"
+    - "html"
+
+# Development Settings
+development:
+  debug: false
+  profile: false
+  test_mode: false
+  sample_data: true
+  mock_execution: true
+
+# Strategy Templates
+templates:
+  momentum:
+    lookback: [5, 10, 20, 60]
+    threshold: [0.02, 0.05, 0.1]
+    position_sizing: "dynamic"
+    
+  mean_reversion:
+    window: [10, 20, 50]
+    std_dev: [1.5, 2.0, 2.5]
+    mean_type: "simple"
+    
+  trend_following:
+    fast_ma: [5, 10, 20]
+    slow_ma: [20, 50, 100]
+    trend_strength: 0.5
+    
+  volatility:
+    calculation_window: [10, 20, 30]
+    entry_threshold: [0.15, 0.2, 0.25]
+    position_adjust: true

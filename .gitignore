@@ -1,0 +1,103 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Keep test report structure but ignore contents
+tests/reports/runs/*
+!tests/reports/runs/.gitkeep
+tests/reports/coverage/*
+!tests/reports/coverage/.gitkeep
+tests/reports/logs/*
+!tests/reports/logs/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Data
+data/
+*.csv
+*.json
+*.sqlite
+*.db
+
+# Cache
+.cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Documentation
+docs/_build/
+docs/api/_build/
+docs/tutorials/_build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# Trading system specific
+cache/
+results/
+backtest_results/
+strategies/*.json
+configs/*.local.yaml
+*.pem
+*.key
+*.crt
+*.csr
+auth_tokens.json

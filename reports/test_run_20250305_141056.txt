@@ -1,0 +1,4 @@
+timestamp: 2025-03-05T14:10:56.355650
+success: False
+duration: 0:00:03.125366
+command: pytest -m unit -
